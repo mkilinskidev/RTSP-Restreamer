@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kamera live</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #ffffff;
+      color: #172026;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: #ffffff;
+    }
+
+    main {
+      width: 100%;
+    }
+
+    video {
+      display: block;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      background: #000000;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <video id="camera" controls autoplay muted playsinline></video>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.18/dist/hls.min.js"></script>
+  <script>
+    const video = document.getElementById("camera");
+    const streamUrl = `/hls/stream.m3u8?ts=${Date.now()}`;
+    let hls;
+
+    function getDiagnostics(extra = "") {
+      const buffered = [];
+      for (let i = 0; i < video.buffered.length; i += 1) {
+        buffered.push(`${video.buffered.start(i).toFixed(1)}-${video.buffered.end(i).toFixed(1)}`);
+      }
+
+      return {
+        time: Number(video.currentTime.toFixed(1)),
+        readyState: video.readyState,
+        networkState: video.networkState,
+        paused: video.paused,
+        size: `${video.videoWidth}x${video.videoHeight}`,
+        buffer: buffered.join("|") || "-",
+        extra
+      };
+    }
+
+    function logDiagnostics(eventName, extra = "") {
+      console.log(`[camera] ${eventName}`, getDiagnostics(extra));
+    }
+
+    setInterval(() => logDiagnostics("state"), 5000);
+    video.addEventListener("playing", () => logDiagnostics("playing"));
+    video.addEventListener("waiting", () => logDiagnostics("waiting"));
+    video.addEventListener("error", () => {
+      const err = video.error;
+      console.error("[camera] video error", {
+        code: err ? err.code : null,
+        message: err ? err.message : "unknown",
+        diagnostics: getDiagnostics("video-error")
+      });
+    });
+
+    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+
+    if (window.Hls && Hls.isSupported() && !isSafari) {
+      hls = new Hls({
+        liveSyncDurationCount: 3,
+        maxLiveSyncPlaybackRate: 1.5,
+        debug: false
+      });
+
+      hls.loadSource(streamUrl);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        logDiagnostics("manifest-parsed");
+        video.play().catch(() => {
+          logDiagnostics("autoplay-blocked");
+        });
+      });
+      hls.on(Hls.Events.FRAG_LOADED, (_, data) => {
+        logDiagnostics("fragment-loaded", `sn=${data.frag.sn}`);
+      });
+      hls.on(Hls.Events.FRAG_BUFFERED, () => {
+        logDiagnostics("fragment-buffered");
+      });
+      hls.on(Hls.Events.ERROR, (_, data) => {
+        console.warn("HLS error", data);
+        logDiagnostics("hls-error", data.details);
+        if (data.fatal) {
+          console.error("[camera] fatal HLS error", data);
+        }
+      });
+    } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+      video.src = streamUrl;
+      logDiagnostics("native-hls");
+    } else {
+      console.error("[camera] HLS playback is not supported by this browser.");
+    }
+  </script>
+</body>
+</html>

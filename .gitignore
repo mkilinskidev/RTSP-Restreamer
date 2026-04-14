@@ -1,0 +1,9 @@
+.env
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+
+# Runtime HLS output if HLS_DIR is pointed inside the project.
+*.m3u8
+*.ts
