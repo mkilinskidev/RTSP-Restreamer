@@ -1,8 +1,8 @@
 services:
   restreamer:
     build: .
-    ports:
-      - "127.0.0.1:8000:8000"
+    expose:
+      - "8000"
     environment:
       CAMERA_RTSP_URL: ${CAMERA_RTSP_URL:-rtsp://your_ip_address/Streaming/Channels/101}
       CAMERA_RTSP_USERNAME: ${CAMERA_RTSP_USERNAME:-username}
